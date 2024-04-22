@@ -13,6 +13,7 @@ using System.Data;
 using System.Windows.Forms.VisualStyles;
 using System.Text.RegularExpressions;
 using System.Security.Cryptography.X509Certificates;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
 
 namespace ExcelAddInUSZN
 {
@@ -34,6 +35,12 @@ namespace ExcelAddInUSZN
 
         private void sample_to_use()
         {
+            // Переменные для Таблицы 4
+            double time_in_minutes;
+
+            // переменные для раздела 3
+            double minutes;
+
             // Получение активного листа в Excel
             Excel.Worksheet activeWorksheet = ((Excel.Worksheet)Globals.ThisAddIn.Application.ActiveSheet);
             // Создание нового экземпляра приложения Word
@@ -46,14 +53,23 @@ namespace ExcelAddInUSZN
 
             // Активация нового документа
             wordDoc.Activate();
-            
+
             ContentDocument cd = new ContentDocument();
-            // Создадим список кортежей для объединения ячеек
-            List<Tuple<int, int>> mergeCellsTab4 = new List<Tuple<int, int>>
-            {
-                new Tuple<int, int>(3, 2),     // Объединить ячейку в третьей строке, первом столбце
-                new Tuple<int, int>(3, 3)      // Объединить ячейку в третьей строке, втором столбце
-            };
+
+            // данные к пункту 3
+            minutes = Math.Round(activeWorksheet.Range["E42"].Value2);
+            TimeSpan hours_minutes = TimeSpan.FromDays(activeWorksheet.Range["E43"].Value2);
+            cd.minutes = sing_time((string)minutes.ToString(), false);
+            cd.hours_minutes = sing_time((string)hours_minutes.ToString());
+
+            // данные к таблице 4 пункта 4.5
+            time_in_minutes = Math.Round(activeWorksheet.Range["E44"].Value2);
+            TimeSpan time_in_hours = TimeSpan.FromDays(activeWorksheet.Range["E45"].Value2);
+            cd.time_in_minutes = sing_time2((string)time_in_minutes.ToString(), false);
+            cd.time_in_hours = sing_time2((string)time_in_hours.ToString());
+            // 
+            string[] footnotes = cd.create_footnotes();
+            char[] symbols = new char[] { '\u00B9', '\u00B2', '\u2074', '\u2075', '\u2076' };
             // Указываем диапазоны для считывания данных
             List<string> excelRanges = new List<string>
             {
@@ -63,6 +79,19 @@ namespace ExcelAddInUSZN
                 "BG5:BG37",
                 "BZ5:BZ37"
             };
+
+            HashSet<string> hashSet_excelRanges = Create_a_list_table_ServicesProvided(activeWorksheet, excelRanges);
+            cd.count_servise = hashSet_excelRanges.Count.ToString();
+            // Создадим список кортежей для объединения ячеек
+            List<Tuple<int, int>> mergeCellsTab4 = new List<Tuple<int, int>>
+            {
+                new Tuple<int, int>(3, 2),     // Объединить ячейку в третьей строке, первом столбце
+                new Tuple<int, int>(3, 3)      // Объединить ячейку в третьей строке, втором столбце
+            };
+
+
+
+
             //Создание временных таблиц
 
             System.Data.DataTable dt1 = cd.CreateTable1();
@@ -96,7 +125,7 @@ namespace ExcelAddInUSZN
                 // пункт 2
                 () => InsertText(wordDoc,cd.paragraph2,false,"Times New Roman",Word.WdParagraphAlignment.wdAlignParagraphJustify),
                 // пункт 3
-                () => InsertText(wordDoc,cd.paragraph3,false,"Times New Roman",Word.WdParagraphAlignment.wdAlignParagraphJustify),
+                () => InsertText(wordDoc,cd.timeInString(),false,"Times New Roman",Word.WdParagraphAlignment.wdAlignParagraphJustify),
                 // пункт 4
                 () => InsertText(wordDoc,cd.paragraph4),
                 // подпункт 4.1
@@ -121,6 +150,8 @@ namespace ExcelAddInUSZN
                 () => CopyExcelTableToWord(activeWorksheet, wordDoc, "BG1:BX38"),
                 // Таблица 5 неделя 5
                 () => CopyExcelTableToWord(activeWorksheet, wordDoc, "BZ1:CQ38"),
+                // примечание к таблицам недель1-5
+                () => InsertText(wordDoc,cd.explanation,false,"Times New Roman",Word.WdParagraphAlignment.wdAlignParagraphLeft,10),
                 // подпункт 4.5
                 () => InsertText(wordDoc,cd.paragraph4_5),
                 // таблица 4
@@ -131,8 +162,9 @@ namespace ExcelAddInUSZN
                 () => CreateTableAndInsert(wordDoc,dt5,true),
                 // пункт 6
                 () => InsertText(wordDoc,cd.paragraph6),
+                
                 // таблица услуг которые не требуются переписать 
-                () => Create_a_list_table_Delete(activeWorksheet, wordDoc,excelRanges),
+                () => Create_a_list_table_not_included(activeWorksheet, wordDoc,hashSet_excelRanges),
                 // пункт 7
                 () => InsertText(wordDoc,cd.paragraph7),
                 // пункт 8
@@ -142,7 +174,8 @@ namespace ExcelAddInUSZN
                 () => CreateTableAndInsert(wordDoc,dt7,false),
                 () => InsertText(wordDoc, cd.text_pered_podpis2),
                 () => CreateTableAndInsert(wordDoc,dt8,false),
-                () => CreateTableAndInsert(wordDoc,dt9,false)
+                () => CreateTableAndInsert(wordDoc,dt9,false),
+                () => ProcessDocument(wordDoc,symbols,footnotes)
             };
 
             // Вставка структуры документа в Word
@@ -156,15 +189,15 @@ namespace ExcelAddInUSZN
             System.Media.SystemSounds.Asterisk.Play();
         }
 
-        public void CopyExcelTableToWord(Excel.Worksheet activeWorksheet, Document wordDoc, string range,string styleName = "Times New Roman", float fontSize=10)
+        public void CopyExcelTableToWord(Excel.Worksheet activeWorksheet, Document wordDoc, string range, string styleName = "Times New Roman", float fontSize = 10)
         {
             // Скопируйте указанный диапазон с активного листа
             Excel.Range excelRange = activeWorksheet.Range[range];
             string[] parts = range.Split(':');
             Regex regex = new Regex("[A-Za-z]+"); // Регулярное выражение для извлечения буквенной части
-            string firstColumn =  regex.Match(parts[0]).Value; // Получаем "ABA" или "B"
-            //string endColumn = regex.Match(parts[1]).Value; // Получаем "ABD" или "S"
-           
+            string firstColumn = regex.Match(parts[0]).Value; // Получаем "ABA" или "B"
+                                                              //string endColumn = regex.Match(parts[1]).Value; // Получаем "ABD" или "S"
+
 
             int firstColumnIndex = ColumnLetterToNumber(firstColumn);
             int lastColumn;
@@ -177,18 +210,18 @@ namespace ExcelAddInUSZN
                 // Проверьте, заполнена ли ячейка
                 if (!string.IsNullOrWhiteSpace(firstCell.Value))
                 {
-                    if(firstColumnIndex == 1)
+                    if (firstColumnIndex == 1)
                     {
                         lastColumn = 0;
                     }
-                    else 
+                    else
                     {
-                        lastColumn = firstColumnIndex-2;
+                        lastColumn = firstColumnIndex - 2;
                     }
                     // Если ячейка заполнена, скопируйте эту строку
                     //Excel.Range rowRange = activeWorksheet.Range[activeWorksheet.Cells[i, firstColumnIndex], activeWorksheet.Cells[i, excelRange.Columns.Count+1]];
-                    Excel.Range rowRange = activeWorksheet.Range[activeWorksheet.Cells[i, firstColumnIndex], activeWorksheet.Cells[i, excelRange.Columns.Count + 1+ lastColumn]];
-                    rowRange.Copy(); 
+                    Excel.Range rowRange = activeWorksheet.Range[activeWorksheet.Cells[i, firstColumnIndex], activeWorksheet.Cells[i, excelRange.Columns.Count + 1 + lastColumn]];
+                    rowRange.Copy();
                     // Вставьте скопированную строку в документ Word
                     Word.Range wordRange = wordDoc.Range(wordDoc.Content.End - 1, wordDoc.Content.End - 1);
                     wordRange.Paste();
@@ -204,7 +237,7 @@ namespace ExcelAddInUSZN
                     table.Borders.InsideLineStyle = Word.WdLineStyle.wdLineStyleSingle;
 
                 }
-            }            
+            }
         }
 
         public void CopyExcelTableToWord2(Excel.Worksheet activeWorksheet, Document wordDoc, string range)
@@ -230,57 +263,74 @@ namespace ExcelAddInUSZN
                 cell.Range.Font.Size = 10;
             }
         }
-       
-        private void Create_a_list_table_Delete(Worksheet activeWorksheet, Document wordDoc, List<string> ranges)
+        // Определение услуг которые предоставляются переписать на метод с возвращающимся значением
+        private HashSet<string> Create_a_list_table_ServicesProvided(Worksheet activeWorksheet, List<string> ranges)
         {
-            // Эта функция создает таблицу в документе Word из уникальных данных в листе Excel.
-            Word.Range rng = wordDoc.Content;
-            rng.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
-            // Устанавливает точку вставки в конец документа Word.
-
-            try
+            // Создается HashSet для хранения уникальных данных.
+            HashSet<string> uniqueData = new HashSet<string>();
+            foreach (string range in ranges)
             {
-                // Создается HashSet для хранения уникальных данных.
-                HashSet<string> uniqueData = new HashSet<string>();
-                foreach (string range in ranges)
-                {
-                    // Для каждого диапазона в списке диапазонов он получает соответствующий диапазон из листа Excel.
-                    Excel.Range excelRange = activeWorksheet.Range[range];
+                // Для каждого диапазона в списке диапазонов он получает соответствующий диапазон из листа Excel.
+                Excel.Range excelRange = activeWorksheet.Range[range];
 
-                    // Извлекаем уникальные данные из каждого диапазона
-                    foreach (Excel.Range cell in excelRange)
+                // Извлекаем уникальные данные из каждого диапазона
+                foreach (Excel.Range cell in excelRange)
+                {
+                    // Проверяем, не пустая ли ячейка
+                    if (!string.IsNullOrWhiteSpace(cell.Value))
                     {
-                        // Проверяем, не пустая ли ячейка
-                        if (!string.IsNullOrWhiteSpace(cell.Value))
-                        {
-                            uniqueData.Add(RemoveNumbersAtStart(cell.Value.ToString()));
-                        }
+                        uniqueData.Add(RemoveNumbersAtStart(cell.Value.ToString()));
                     }
                 }
+            }
+            return uniqueData;
+        }
 
+        // определение услуг которые не предоставляются
+        private void Create_a_list_table_not_included(Worksheet activeWorksheet, Document wordDoc, HashSet<string> uniqueData)
+        {
+            string rangeBase = "B56:B105";
+            List<string> difference = new List<string>();
+            HashSet<string> dataBase = new HashSet<string>();
+            // Эта функция создает таблицу в документе Word из yt уникальных данных в листе Excel.
+            Word.Range rng = wordDoc.Content;
+            // Устанавливает точку вставки в конец документа Word.
+            rng.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
+            try
+            {
+                // определение общего списка услуг
+                Excel.Range excelRangeBase = activeWorksheet.Range[rangeBase];
+                foreach (Excel.Range cell in excelRangeBase)
+                {
+                    // Проверяем, не пустая ли ячейка
+                    if (!string.IsNullOrWhiteSpace(cell.Value))
+                    {
+                        dataBase.Add(RemoveNumbersAtStart(cell.Value.ToString()));
+                    }
+                }
+                // определяем услуги не вошедшие в перечень предоставляемых услуг
+                difference.AddRange(dataBase.Except(uniqueData));
 
                 // Создает таблицу в документе Word с числом строк, равным числу уникальных данных плюс 2 (для заголовка и подвала), и 2 столбца.
-                Table wordTable = wordDoc.Tables.Add(rng, uniqueData.Count + 2, 2);
+                Table wordTable = wordDoc.Tables.Add(rng, difference.Count + 2, 2);
                 wordTable.Borders.Enable = 1; // Включаем границы таблицы
 
                 // Объединяем ячейки в шапке
                 wordTable.Cell(1, 1).Merge(wordTable.Cell(1, 2));
                 // Заполняем шапку таблицы
                 wordTable.Cell(1, 1).Range.Text = "Наименование социальной услуги по уходу";
-
-                // Заполняем строки данными из списка HashSet.
+                // Заполняем строки данными из списка List difference.
                 int rowIndex = 2;
-                foreach (string data in uniqueData)
+                foreach (string data in difference)
                 {
                     // Объединяем ячейки таблицы
                     wordTable.Cell(rowIndex, 1).Merge(wordTable.Cell(rowIndex, 2));
                     wordTable.Cell(rowIndex, 1).Range.Text = data;
                     rowIndex++;
                 }
-                // Заполняем подвал таблицы
-                wordTable.Cell(uniqueData.Count + 2, 1).Range.Text = "Общее количество социальных услуг по уходу, не включенных в социальный пакет долговременного ухода";
-                wordTable.Cell(uniqueData.Count + 2, 2).Range.Text = uniqueData.Count.ToString();
-
+                // Заполняем подвал таблицы ?
+                wordTable.Cell(difference.Count + 2, 1).Range.Text = "Общее количество социальных услуг по уходу, не включенных в социальный пакет долговременного ухода" + '\u2075';
+                wordTable.Cell(difference.Count + 2, 2).Range.Text = difference.Count.ToString();
             }
             catch (Exception e)
             {
@@ -288,8 +338,6 @@ namespace ExcelAddInUSZN
                 //MessageBox.Show($"Ошибка: {e.Message}");
             }
         }
-        
-        
 
         public int ColumnLetterToNumber(string columnLetter)
         {
@@ -301,7 +349,7 @@ namespace ExcelAddInUSZN
             }
             return columnNumber;
         }
-        private void InsertText(Document wordDoc, string text, bool nullString = false, string fontName = "Times New Roman", 
+        private void InsertText(Document wordDoc, string text, bool nullString = false, string fontName = "Times New Roman",
                                     Word.WdParagraphAlignment alignment = Word.WdParagraphAlignment.wdAlignParagraphLeft,
                                     int fontSize = 11, int bold = 0)
         {
@@ -327,8 +375,8 @@ namespace ExcelAddInUSZN
             rng.ParagraphFormat.Alignment = alignment;
         }
         public void CreateTableAndInsert(Word.Document wordDoc, System.Data.DataTable dt, bool table_boundaries = true, List<Tuple<int, int>> mergeCells = null,
-                                    string fontName = "Times New Roman", int fontSize = 10, 
-                                    Word.WdParagraphAlignment alignment = Word.WdParagraphAlignment.wdAlignParagraphCenter, 
+                                    string fontName = "Times New Roman", int fontSize = 10,
+                                    Word.WdParagraphAlignment alignment = Word.WdParagraphAlignment.wdAlignParagraphCenter,
                                     Word.WdCellVerticalAlignment verticalAlignment = Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter)
         {
             Word.Range rng = wordDoc.Content;
@@ -382,7 +430,7 @@ namespace ExcelAddInUSZN
             para.Range.InsertParagraphAfter();
         }
 
-        public void GetTableWidth(Word.Document wordDoc, int tableNumber) 
+        public void GetTableWidth(Word.Document wordDoc, int tableNumber)
         {
             try
             {
@@ -399,15 +447,97 @@ namespace ExcelAddInUSZN
                 // Обработка ошибки, если таблица не найдена или возникла другая проблема
                 // Вместо этого можно вернуть float.MinValue или другое значение по умолчанию
                 // в зависимости от требований вашего приложения.
-               //MessageBox.Show($"Ошибка: {e.Message}");
-                
+                //MessageBox.Show($"Ошибка: {e.Message}");
+
             }
         }
 
-        public static string RemoveNumbersAtStart(string input)
+        private string RemoveNumbersAtStart(string input)
         {
             // Удаляем числа и точку в начале строки
             return Regex.Replace(input.Trim(), @"^\d+\.?\s*", "");
+        }
+
+        private string sing_time(string time, bool hour = true)
+        {
+            string time_sing;
+            if (hour)
+            {
+                // Разделить входную строку на часы, минуты и секунды
+                string[] parts_of_the_time = time.Split(':');
+
+                // Преобразовать значения строк в целые числа
+                string hours = parts_of_the_time[0];
+                string minutes = parts_of_the_time[1];
+
+                // Форматировать выходную строку
+                time_sing = $"{hours} часов {minutes} минут";
+            }
+            else
+            {
+                time_sing = $"{time} минут";
+            }
+
+            return time_sing;
+        }
+        private string sing_time2(string time, bool hour = true)
+        {
+            string time_sing;
+            if (hour)
+            {
+                // Разделить входную строку на часы, минуты и секунды
+                string[] parts_of_the_time = time.Split(':');
+
+                // Преобразовать значения строк в целые числа
+                string hours = parts_of_the_time[0];
+                string minutes = parts_of_the_time[1];
+
+                // Форматировать выходную строку
+                time_sing = $"{hours},{minutes}";
+            }
+            else
+            {
+                time_sing = $"{time} ";
+            }
+
+            return time_sing;
+        }
+        
+        private void AddFootnote(Word.Document wordDoc, Word.Range range, string footnoteText)
+        {
+            // Создаем сноску
+            Word.Footnote footnote = wordDoc.Footnotes.Add(range, "", footnoteText);
+
+            // Устанавливаем формат сноски
+            footnote.Range.Font.Size = 8;
+            footnote.Range.Font.Name = "Times New Roman";
+        }
+        public void ProcessDocument(Word.Document wordDoc, char[] symbols, string[] footnotes)
+        {
+            // Ищем в документе символы из массива symbols
+            Word.Range range = wordDoc.Content; // Используем только основной текст документа
+            for (int i = 0; i < symbols.Length; i++)
+            {
+                int start = 0;
+                while (start < range.End)
+                {
+                    Word.Range searchRange = range.Duplicate;
+                    searchRange.Start = start;
+                    searchRange.Find.ClearFormatting();
+                    searchRange.Find.Text = symbols[i].ToString();
+
+                    if (searchRange.Find.Execute())
+                    {
+                        // Добавляем сноску
+                        AddFootnote(wordDoc, searchRange, footnotes[i]);
+                        start = searchRange.End;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
         }
 
     }
