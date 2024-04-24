@@ -268,8 +268,8 @@ namespace ExcelAddInUSZN
         public System.Data.DataTable CreateTable7()
         {
             System.Data.DataTable dt = new System.Data.DataTable();
-            // Создание DataTable с 2 столбцами
-            for (int i = 0; i < 2; i++)
+            // Создание DataTable с 3 столбцами
+            for (int i = 0; i < 3; i++)
             {
                 dt.Columns.Add();
             }
@@ -279,10 +279,28 @@ namespace ExcelAddInUSZN
                 dt.Rows.Add();
             }
             dt.Rows[1][0] = "(подпись гражданина или его законного представителя)";
-            dt.Rows[1][1] = "(ФИО)";
+            dt.Rows[1][2] = "(ФИО)";
             return dt;
         }
         public System.Data.DataTable CreateTable8()
+        {
+            System.Data.DataTable dt = new System.Data.DataTable();
+            // Создание DataTable с 5 столбцами
+            for (int i = 0; i < 5; i++)
+            {
+                dt.Columns.Add();
+            }
+            // Добавление 3-х строк в DataTable
+            for (int i = 0; i < 2; i++)
+            {
+                dt.Rows.Add();
+            }
+            dt.Rows[1][0] = "(должность)";
+            dt.Rows[1][2] = "(ФИО)";
+            dt.Rows[1][4] = "(подпись)";
+            return dt;
+        }
+        public System.Data.DataTable CreateTable9()
         {
             System.Data.DataTable dt = new System.Data.DataTable();
             // Создание DataTable с 3 столбцами
@@ -295,26 +313,8 @@ namespace ExcelAddInUSZN
             {
                 dt.Rows.Add();
             }
-            dt.Rows[1][0] = "(должность)";
-            dt.Rows[1][1] = "(ФИО)";
-            dt.Rows[1][2] = "(подпись)";
-            return dt;
-        }
-        public System.Data.DataTable CreateTable9()
-        {
-            System.Data.DataTable dt = new System.Data.DataTable();
-            // Создание DataTable с 3 столбцами
-            for (int i = 0; i < 2; i++)
-            {
-                dt.Columns.Add();
-            }
-            // Добавление 3-х строк в DataTable
-            for (int i = 0; i < 2; i++)
-            {
-                dt.Rows.Add();
-            }
             dt.Rows[1][0] = "М. П.";
-            dt.Rows[1][1] = "(дата составления дополнения к ИППСУ)";
+            dt.Rows[1][2] = "(дата составления дополнения к ИППСУ)";
             
 
             return dt;

@@ -109,7 +109,7 @@ namespace ExcelAddInUSZN
                 // Заголовок
                 () => InsertText(wordDoc, cd.heading, false,"Times New Roman", Word.WdParagraphAlignment.wdAlignParagraphCenter,14, 1),
                 //Таблица1 (Дата составления, Номер регистрации, Статус)
-                () => CreateTableAndInsert(wordDoc,  dt1,false),
+                () => CreateTableAndInsert(wordDoc,  dt1,false,null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
                 // Фамилия
                 () => InsertText(wordDoc, cd.surname),
                 // Имя
@@ -162,7 +162,6 @@ namespace ExcelAddInUSZN
                 () => CreateTableAndInsert(wordDoc,dt5,true),
                 // пункт 6
                 () => InsertText(wordDoc,cd.paragraph6),
-                
                 // таблица услуг которые не требуются переписать 
                 () => Create_a_list_table_not_included(activeWorksheet, wordDoc,hashSet_excelRanges),
                 // пункт 7
@@ -171,11 +170,11 @@ namespace ExcelAddInUSZN
                 () => InsertText(wordDoc,cd.paragraph8),
                 // подвал документа 
                 () => InsertText(wordDoc, cd.text_pered_podpis1),
-                () => CreateTableAndInsert(wordDoc,dt7,false),
+                () => CreateTableAndInsert(wordDoc,dt7,false,null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
                 () => InsertText(wordDoc, cd.text_pered_podpis2),
-                () => CreateTableAndInsert(wordDoc,dt8,false),
-                () => CreateTableAndInsert(wordDoc,dt9,false),
-                () => ProcessDocument(wordDoc,symbols,footnotes)
+                () => CreateTableAndInsert(wordDoc,dt8,false, null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
+                () => CreateTableAndInsert(wordDoc,dt9,false, null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
+                //() => ProcessDocument2(wordDoc,symbols,footnotes)
             };
 
             // Вставка структуры документа в Word
@@ -374,31 +373,49 @@ namespace ExcelAddInUSZN
             //по центру или по правому краю.
             rng.ParagraphFormat.Alignment = alignment;
         }
+
+
         public void CreateTableAndInsert(Word.Document wordDoc, System.Data.DataTable dt, bool table_boundaries = true, List<Tuple<int, int>> mergeCells = null,
-                                    string fontName = "Times New Roman", int fontSize = 10,
-                                    Word.WdParagraphAlignment alignment = Word.WdParagraphAlignment.wdAlignParagraphCenter,
-                                    Word.WdCellVerticalAlignment verticalAlignment = Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter)
+                     string fontName = "Times New Roman", int fontSize = 10,
+                     Word.WdParagraphAlignment alignment = Word.WdParagraphAlignment.wdAlignParagraphCenter,
+                     Word.WdCellVerticalAlignment verticalAlignment = Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,
+                     bool underline = false) // Добавлен новый параметр
         {
+            // Создаем массив с заданными словами
+            string[] words = new string[] { "№", "Статус", "М. П." };
+
+            // Получаем текущий диапазон документа и перемещаем курсор в конец
             Word.Range rng = wordDoc.Content;
             rng.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
-            Word.Table table = wordDoc.Tables.Add(rng, dt.Rows.Count, dt.Columns.Count); // Используйте rng вместо wordDoc.Content
+
+            // Добавляем таблицу в документ с количеством строк и столбцов, соответствующим DataTable
+            Word.Table table = wordDoc.Tables.Add(rng, dt.Rows.Count, dt.Columns.Count);
 
             int row = 1;
+            // Проходим по каждой строке DataTable
             foreach (DataRow dr in dt.Rows)
             {
+                // Проходим по каждому столбцу DataTable
                 for (int col = 1; col <= dt.Columns.Count; col++)
                 {
-                    //table.Cell(row, col).Range.Text = dr[col - 1].ToString();
+                    // Получаем диапазон ячейки и устанавливаем текст, шрифт, размер шрифта, выравнивание и вертикальное выравнивание
                     Word.Range cellRange = table.Cell(row, col).Range;
                     cellRange.Text = dr[col - 1].ToString();
                     cellRange.Font.Name = fontName;
                     cellRange.Font.Size = fontSize;
                     cellRange.ParagraphFormat.Alignment = alignment;
                     table.Cell(row, col).VerticalAlignment = verticalAlignment;
+
+                    // Если в ячейке есть текст и он не совпадает с заданными словами, то добавляем верхнюю границу
+                    if (!string.IsNullOrEmpty(dr[col - 1].ToString()) && !words.Contains(dr[col - 1].ToString()))
+                    {
+                        table.Cell(row, col).Borders[Word.WdBorderType.wdBorderTop].LineStyle = Word.WdLineStyle.wdLineStyleSingle;
+                    }
                 }
                 row++;
             }
-            // Установка цвета границ таблицы
+
+            // Если table_boundaries = true, то устанавливаем границы таблицы
             if (table_boundaries)
             {
                 table.Borders.OutsideColor = Word.WdColor.wdColorBlack;
@@ -409,7 +426,7 @@ namespace ExcelAddInUSZN
 
             try
             {
-                // Объединение указанных ячеек
+                // Если mergeCells не null, то объединяем указанные ячейки
                 if (mergeCells != null)
                 {
                     foreach (var cell in mergeCells)
@@ -421,10 +438,9 @@ namespace ExcelAddInUSZN
             catch (System.Runtime.InteropServices.COMException e)
             {
                 // Обработка ошибки при объединении ячеек
-                //MessageBox.Show($"Ошибка при объединении ячеек: {e.Message}");
             }
 
-            // Перенос каретки на новую строку
+            // Добавляем новый абзац в конец документа
             Word.Paragraph para = wordDoc.Content.Paragraphs.Add();
             para.Range.Text = "\n";
             para.Range.InsertParagraphAfter();
@@ -531,6 +547,7 @@ namespace ExcelAddInUSZN
                         // Добавляем сноску
                         AddFootnote(wordDoc, searchRange, footnotes[i]);
                         start = searchRange.End;
+                        
                     }
                     else
                     {
@@ -540,5 +557,55 @@ namespace ExcelAddInUSZN
             }
         }
 
+        public void ProcessDocument2(Word.Document wordDoc, char[] symbols, string[] footnotes)
+        {
+            // Создаем список для отслеживания уже обработанных символов
+            List<char> processedSymbols = new List<char>();
+
+            // Ищем в документе символы из массива symbols
+            Word.Range range = wordDoc.Content; // Используем только основной текст документа
+            for (int i = 0; i < symbols.Length; i++)
+            {
+                // Если символ уже был обработан, пропускаем его
+                if (processedSymbols.Contains(symbols[i]))
+                {
+                    continue;
+                }
+
+                int start = 0;
+                bool symbolFound = false;
+                while (start < range.End)
+                {
+                    Word.Range searchRange = range.Duplicate;
+                    searchRange.Start = start;
+                    searchRange.Find.ClearFormatting();
+                    searchRange.Find.Text = symbols[i].ToString();
+
+                    if (searchRange.Find.Execute())
+                    {
+                        // Если это первое обнаружение символа, добавляем сноску
+                        if (!symbolFound)
+                        {
+                            searchRange.Text = ""; // Удаляем символ
+                            AddFootnote(wordDoc, searchRange, footnotes[i]);
+                            symbolFound = true;
+                        }
+                        start = searchRange.End;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                // Добавляем символ в список обработанных
+                if (symbolFound)
+                {
+                    processedSymbols.Add(symbols[i]);
+                }
+            }
+        }
+
+        
     }
 }
