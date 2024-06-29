@@ -14,6 +14,9 @@ using System.Windows.Forms.VisualStyles;
 using System.Text.RegularExpressions;
 using System.Security.Cryptography.X509Certificates;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
+using System.Runtime.InteropServices;
+using System.IO;
+
 
 namespace ExcelAddInUSZN
 {
@@ -54,6 +57,13 @@ namespace ExcelAddInUSZN
             // Активация нового документа
             wordDoc.Activate();
 
+            // Настройка параметров страницы
+
+            wordDoc.PageSetup.LeftMargin = wordApp.CentimetersToPoints(2); // Преобразование сантиметров в точки
+            wordDoc.PageSetup.RightMargin = wordApp.CentimetersToPoints(1); // Преобразование сантиметров в точки
+            wordDoc.PageSetup.TopMargin = wordApp.CentimetersToPoints(1.5f); // Преобразование сантиметров в точки
+            wordDoc.PageSetup.BottomMargin = wordApp.CentimetersToPoints(1.9f); // Преобразование сантиметров в точки
+
             ContentDocument cd = new ContentDocument();
 
             // данные к пункту 3
@@ -69,7 +79,7 @@ namespace ExcelAddInUSZN
             cd.time_in_hours = sing_time2((string)time_in_hours.ToString());
             // 
             string[] footnotes = cd.create_footnotes();
-            char[] symbols = new char[] { '\u00B9', '\u00B2', '\u2074', '\u2075', '\u2076' };
+            char[] symbols = new char[] { '\u00B9', '\u00B2', '\u00B3', '\u2074', '\u2075', '\u2076' };
             // Указываем диапазоны для считывания данных
             List<string> excelRanges = new List<string>
             {
@@ -109,7 +119,7 @@ namespace ExcelAddInUSZN
                 // Заголовок
                 () => InsertText(wordDoc, cd.heading, false,"Times New Roman", Word.WdParagraphAlignment.wdAlignParagraphCenter,14, 1),
                 //Таблица1 (Дата составления, Номер регистрации, Статус)
-                () => CreateTableAndInsert(wordDoc,  dt1,false,null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
+                () => CreateTableAndInsert(wordDoc,  dt1,false,null,"Times New Roman", 8,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
                 // Фамилия
                 () => InsertText(wordDoc, cd.surname),
                 // Имя
@@ -151,7 +161,8 @@ namespace ExcelAddInUSZN
                 // Таблица 5 неделя 5
                 () => CopyExcelTableToWord(activeWorksheet, wordDoc, "BZ1:CQ38"),
                 // примечание к таблицам недель1-5
-                () => InsertText(wordDoc,cd.explanation,false,"Times New Roman",Word.WdParagraphAlignment.wdAlignParagraphLeft,10),
+                () => InsertText(wordDoc,cd.explanation,false,"Times New Roman",Word.WdParagraphAlignment.wdAlignParagraphLeft,9),
+                () => ClearClipboard(),
                 // подпункт 4.5
                 () => InsertText(wordDoc,cd.paragraph4_5),
                 // таблица 4
@@ -170,11 +181,11 @@ namespace ExcelAddInUSZN
                 () => InsertText(wordDoc,cd.paragraph8),
                 // подвал документа 
                 () => InsertText(wordDoc, cd.text_pered_podpis1),
-                () => CreateTableAndInsert(wordDoc,dt7,false,null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
+                () => CreateTableAndInsert(wordDoc,dt7,false,null,"Times New Roman", 8,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
                 () => InsertText(wordDoc, cd.text_pered_podpis2),
-                () => CreateTableAndInsert(wordDoc,dt8,false, null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
-                () => CreateTableAndInsert(wordDoc,dt9,false, null,"Times New Roman", 5,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
-                //() => ProcessDocument2(wordDoc,symbols,footnotes)
+                () => CreateTableAndInsert(wordDoc,dt8,false, null,"Times New Roman", 8,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
+                () => CreateTableAndInsert(wordDoc,dt9,false, null,"Times New Roman", 8,Word.WdParagraphAlignment.wdAlignParagraphCenter,Word.WdCellVerticalAlignment.wdCellAlignVerticalCenter,true ),
+                () => ProcessDocument2(wordDoc,symbols,footnotes)
             };
 
             // Вставка структуры документа в Word
@@ -183,85 +194,124 @@ namespace ExcelAddInUSZN
                 action();
             }
 
+            Marshal.ReleaseComObject(wordApp);
+
+
             GetTableWidth(wordDoc, 4);
 
             System.Media.SystemSounds.Asterisk.Play();
         }
+        
 
-        public void CopyExcelTableToWord(Excel.Worksheet activeWorksheet, Document wordDoc, string range, string styleName = "Times New Roman", float fontSize = 10)
+        private void CopyExcelTableToWord(Excel.Worksheet activeWorksheet, Document wordDoc, string range, string styleName = "Times New Roman", float fontSize = 10)
         {
-            // Скопируйте указанный диапазон с активного листа
-            Excel.Range excelRange = activeWorksheet.Range[range];
-            string[] parts = range.Split(':');
-            Regex regex = new Regex("[A-Za-z]+"); // Регулярное выражение для извлечения буквенной части
-            string firstColumn = regex.Match(parts[0]).Value; // Получаем "ABA" или "B"
-                                                              //string endColumn = regex.Match(parts[1]).Value; // Получаем "ABD" или "S"
+            Excel.Range excelRange = activeWorksheet.Range[range, Type.Missing];
+            object[,] values = excelRange.Value2;
 
-
-            int firstColumnIndex = ColumnLetterToNumber(firstColumn);
-            int lastColumn;
-            // Пройдите по каждой строке в указанном диапазоне
+            // Определите количество непустых строк
+            int rowCount = 0;
             for (int i = 1; i <= excelRange.Rows.Count; i++)
             {
-                // Получите ячейку в первом столбце
-                Excel.Range firstCell = excelRange.Cells[i, 1];
-
-                // Проверьте, заполнена ли ячейка
-                if (!string.IsNullOrWhiteSpace(firstCell.Value))
+                if (i <= 4 || !string.IsNullOrWhiteSpace(values[i, 1]?.ToString()))
                 {
-                    if (firstColumnIndex == 1)
-                    {
-                        lastColumn = 0;
-                    }
-                    else
-                    {
-                        lastColumn = firstColumnIndex - 2;
-                    }
-                    // Если ячейка заполнена, скопируйте эту строку
-                    //Excel.Range rowRange = activeWorksheet.Range[activeWorksheet.Cells[i, firstColumnIndex], activeWorksheet.Cells[i, excelRange.Columns.Count+1]];
-                    Excel.Range rowRange = activeWorksheet.Range[activeWorksheet.Cells[i, firstColumnIndex], activeWorksheet.Cells[i, excelRange.Columns.Count + 1 + lastColumn]];
-                    rowRange.Copy();
-                    // Вставьте скопированную строку в документ Word
-                    Word.Range wordRange = wordDoc.Range(wordDoc.Content.End - 1, wordDoc.Content.End - 1);
-                    wordRange.Paste();
-
-                    // Примените стиль и размер шрифта к вставленной таблице
-                    Table table = wordRange.Tables[wordRange.Tables.Count];
-                    table.Range.Font.Name = styleName;
-                    table.Range.Font.Size = fontSize;
-                    // Установка цвета границ таблицы
-                    table.Borders.OutsideColor = Word.WdColor.wdColorBlack;
-                    table.Borders.InsideColor = Word.WdColor.wdColorBlack;
-                    table.Borders.OutsideLineStyle = Word.WdLineStyle.wdLineStyleSingle;
-                    table.Borders.InsideLineStyle = Word.WdLineStyle.wdLineStyleSingle;
-
+                    rowCount++;
                 }
             }
-        }
 
-        public void CopyExcelTableToWord2(Excel.Worksheet activeWorksheet, Document wordDoc, string range)
-        {
-            // Скопируйте указанный диапазон с активного листа
-            Excel.Range excelRange = activeWorksheet.Range[range];
-            excelRange.Copy();
+            // Получите конечную позицию содержимого в документе Word
+            Word.Range endRange = wordDoc.Content;
+            endRange.Collapse(Word.WdCollapseDirection.wdCollapseEnd);
+            // Создайте новую таблицу в Word с количеством строк, равным количеству непустых строк, и количеством столбцов, равным количеству столбцов в Excel
+            //Word.Table wordTable = wordDoc.Tables.Add(wordDoc.Range(wordDoc.Content.End - 1, wordDoc.Content.End - 1), rowCount, excelRange.Columns.Count);
+            // Создайте новую таблицу в Word и добавьте ее к концу содержимого документа
+            //Word.Table wordTable = wordDoc.Tables.Add((Word.Range)endRange, rowCount, excelRange.Columns.Count);
+            Word.Table wordTable = wordDoc.Tables.Add(endRange, rowCount, excelRange.Columns.Count);
+            // Добавьте границы к таблице
+            Word.Borders borders = wordTable.Borders;
+            borders.OutsideLineStyle = Word.WdLineStyle.wdLineStyleSingle;
+            borders.InsideLineStyle = Word.WdLineStyle.wdLineStyleSingle;
 
-            // Вставьте скопированный диапазон в документ Word
-            Word.Range wordRange = wordDoc.Range(wordDoc.Content.End - 1, wordDoc.Content.End - 1);
-            wordRange.Paste();
-
-            // Получите первую таблицу в документе
-            Word.Table wordTable = wordDoc.Tables[wordDoc.Tables.Count];
-
-            // Измените ширину таблицы, чтобы она соответствовала ширине страницы
-            wordTable.AutoFitBehavior(Word.WdAutoFitBehavior.wdAutoFitWindow);
-
-            // Пройдите по всем ячейкам в таблице и измените шрифт и размер шрифта
-            foreach (Word.Cell cell in wordTable.Range.Cells)
+            // Заполните таблицу данными из массива values, пропуская пустые строки
+            int rowIndex = 1;
+            for (int i = 1; i <= excelRange.Rows.Count; i++)
             {
-                cell.Range.Font.Name = "Times New Roman";
-                cell.Range.Font.Size = 10;
+                if (i <= 4 || !string.IsNullOrWhiteSpace(values[i, 1]?.ToString()))
+                {
+                    for (int j = 1; j <= excelRange.Columns.Count; j++)
+                    {
+                        Word.Cell cell = wordTable.Cell(rowIndex, j);
+                        StringBuilder sb = new StringBuilder(values[i, j]?.ToString() ?? "");
+                        cell.Range.Text = sb.ToString();
+                    }
+                    rowIndex++;
+                }
             }
+
+            // Объединение ячеек в соответствии с заданными условиями
+            wordTable.Cell(1, 1).Merge(wordTable.Cell(1, 18));
+            wordTable.Cell(1, 1).Range.Bold = 1; // Выделение текста первой строки жирным
+            wordTable.Cell(1, 1).Range.ParagraphFormat.Alignment = Word.WdParagraphAlignment.wdAlignParagraphCenter;
+
+            //объединение последнего столбика 2-4 строки
+            wordTable.Cell(2, 18).Merge(wordTable.Cell(4, 18));
+            // объединение ячеек с 4-17 столбик 3 и 4 строки
+            for (int i = 4; i <= 17; i++)
+            {
+                wordTable.Cell(3, i).Merge(wordTable.Cell(4, i));
+            }
+            // объединение 1 столбика 2-4 строки 
+            wordTable.Cell(2, 1).Merge(wordTable.Cell(4, 1));
+
+            // Объединение четырех ячеек
+             wordTable.Cell(2, 2).Merge(wordTable.Cell(3, 3));
+            // повернуть текст на 90 градусов
+            for (int i = 3; i <= 16; i++)
+            {
+                wordTable.Cell(3, i).Range.Orientation = Word.WdTextOrientation.wdTextOrientationUpward;
+            }
+            wordTable.Cell(2, 17).Range.Orientation = Word.WdTextOrientation.wdTextOrientationUpward;
+
+            // объединение столбцов во второй строке  с 5 по 16 столбик
+            wordTable.Cell(2, 15).Merge(wordTable.Cell(2, 16));
+            wordTable.Cell(2, 13).Merge(wordTable.Cell(2, 14));
+            wordTable.Cell(2, 11).Merge(wordTable.Cell(2, 12));
+            wordTable.Cell(2, 9).Merge(wordTable.Cell(2, 10));
+            wordTable.Cell(2, 7).Merge(wordTable.Cell(2, 8));
+            wordTable.Cell(2, 6).Merge(wordTable.Cell(2, 5));
+            wordTable.Cell(2, 4).Merge(wordTable.Cell(2, 3));
+
+            // последняя строка таблицы выделить жирным
+            int lastRow = wordTable.Rows.Count;
+            for (int i = 1; i <= wordTable.Columns.Count; i++)
+            {
+                wordTable.Cell(lastRow, i).Range.Font.Bold = 1;
+            }
+
+            // Получаем ширину листа
+            float pageWidth = wordDoc.PageSetup.PageWidth - wordDoc.PageSetup.LeftMargin - wordDoc.PageSetup.RightMargin;
+
+            // Устанавливаем ширину таблицы
+            wordTable.PreferredWidth = pageWidth;
+            wordTable.AutoFitBehavior(Word.WdAutoFitBehavior.wdAutoFitWindow); // Для автоматического подгонки ширины столбцов
+
+            Word.Font tableFont = wordTable.Range.Font;
+            tableFont.Name = styleName; // Установка имени шрифта
+            tableFont.Size = fontSize;  // Установка размера шрифта
+
+           
+
+            // Добавляем новый абзац в конец документа
+            Word.Paragraph para = wordDoc.Content.Paragraphs.Add();
+            para.Range.Text = "\n";
+            para.Range.InsertParagraphAfter();
+
+            // Освобождение ресурсов
+            Marshal.ReleaseComObject(excelRange);
+            Marshal.ReleaseComObject(wordTable);
         }
+
+
+
         // Определение услуг которые предоставляются переписать на метод с возвращающимся значением
         private HashSet<string> Create_a_list_table_ServicesProvided(Worksheet activeWorksheet, List<string> ranges)
         {
@@ -276,9 +326,10 @@ namespace ExcelAddInUSZN
                 foreach (Excel.Range cell in excelRange)
                 {
                     // Проверяем, не пустая ли ячейка
-                    if (!string.IsNullOrWhiteSpace(cell.Value))
+                    string cellValue = cell.Value2;
+                    if (!string.IsNullOrWhiteSpace(cellValue))
                     {
-                        uniqueData.Add(RemoveNumbersAtStart(cell.Value.ToString()));
+                        uniqueData.Add(RemoveNumbersAtStart(cellValue.ToString()));
                     }
                 }
             }
@@ -302,9 +353,10 @@ namespace ExcelAddInUSZN
                 foreach (Excel.Range cell in excelRangeBase)
                 {
                     // Проверяем, не пустая ли ячейка
-                    if (!string.IsNullOrWhiteSpace(cell.Value))
+                    string cellValue = cell.Value2;
+                    if (!string.IsNullOrWhiteSpace(cellValue))
                     {
-                        dataBase.Add(RemoveNumbersAtStart(cell.Value.ToString()));
+                        dataBase.Add(RemoveNumbersAtStart(cellValue.ToString()));
                     }
                 }
                 // определяем услуги не вошедшие в перечень предоставляемых услуг
@@ -350,7 +402,7 @@ namespace ExcelAddInUSZN
         }
         private void InsertText(Document wordDoc, string text, bool nullString = false, string fontName = "Times New Roman",
                                     Word.WdParagraphAlignment alignment = Word.WdParagraphAlignment.wdAlignParagraphLeft,
-                                    int fontSize = 11, int bold = 0)
+                                    int fontSize = 12, int bold = 0)
         {
             //Word.Range rng = wordDoc.Content; - Получает содержимое всего документа Word и сохраняет его в переменную rng.
             Word.Range rng = wordDoc.Content;
@@ -606,6 +658,82 @@ namespace ExcelAddInUSZN
             }
         }
 
-        
+        public void ClearClipboard()
+        {
+            Clipboard.Clear();
+        }
+
+        // Добавлено Создание таблиц по шаблону
+
+        private void btnCreateTables_Click(object sender, RibbonControlEventArgs e)
+        {
+            using (Templates form = new Templates())
+            {
+                if (form.ShowDialog() == DialogResult.OK)
+                {
+                    string templateFilePath = form.SelectedTemplatePath;
+
+                    if (!File.Exists(templateFilePath))
+                    {
+                        MessageBox.Show($"Файл шаблона не найден: {templateFilePath}");
+                        return;
+                    }
+
+                    Excel.Application excelApp = Globals.ThisAddIn.Application;
+                    Excel.Worksheet activeSheet = (Excel.Worksheet)excelApp.ActiveSheet;
+
+
+                    CreateSheetsFromTemplateInActiveWorkbook2(templateFilePath);
+                }
+            }
+        }
+        private void CreateSheetsFromTemplateInActiveWorkbook2(string templateFilePath)
+        {
+            // Получаем текущее приложение Excel
+            Excel.Application excelApp = Globals.ThisAddIn.Application;
+            Excel.Workbook activeWorkbook = excelApp.ActiveWorkbook;
+
+            // Открываем шаблон
+            Excel.Workbook templateWorkbook = excelApp.Workbooks.Open(templateFilePath);
+
+            try
+            {
+                // Копируем каждый лист шаблона в активную книгу
+                foreach (Excel.Worksheet templateSheet in templateWorkbook.Sheets)
+                {
+                    // Если в активной книге нет листов, создаем новый
+                    if (activeWorkbook.Sheets.Count == 0)
+                    {
+                        activeWorkbook.Sheets.Add();
+                    }
+
+                    // Получаем последний лист в активной книге
+                    Excel.Worksheet targetSheet = (Excel.Worksheet)activeWorkbook.Sheets[activeWorkbook.Sheets.Count];
+
+                    // Копируем данные из шаблона в целевой лист
+                    //templateSheet.UsedRange.Copy(targetSheet.Range["A1"]);
+
+                    // Копируем данные, ширину столбцов и высоту строк из шаблона в целевой лист
+                    templateSheet.UsedRange.EntireRow.Copy(targetSheet.Range["A1"]);
+                    templateSheet.UsedRange.EntireColumn.Copy(targetSheet.Range["A1"]);
+
+                    // Устанавливаем имя целевого листа равным имени листа шаблона
+                    targetSheet.Name = templateSheet.Name;
+                    // Освобождаем COM-объекты для освобождения памяти и избежания блокировок
+                    Marshal.ReleaseComObject(templateSheet);
+
+
+                }
+
+            }
+            finally
+            {
+                // Закрываем шаблон без сохранения
+                templateWorkbook.Close(false);
+                // Освобождаем COM-объект шаблона
+                Marshal.ReleaseComObject(templateWorkbook);
+            }
+        }
+
     }
 }

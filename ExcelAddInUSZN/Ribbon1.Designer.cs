@@ -38,14 +38,18 @@
             this.tab1 = this.Factory.CreateRibbonTab();
             this.group1 = this.Factory.CreateRibbonGroup();
             this.button1 = this.Factory.CreateRibbonButton();
+            this.groupUSZN = this.Factory.CreateRibbonGroup();
+            this.btnCreateTables = this.Factory.CreateRibbonButton();
             this.tab1.SuspendLayout();
             this.group1.SuspendLayout();
+            this.groupUSZN.SuspendLayout();
             this.SuspendLayout();
             // 
             // tab1
             // 
             this.tab1.ControlId.ControlIdType = Microsoft.Office.Tools.Ribbon.RibbonControlIdType.Office;
             this.tab1.Groups.Add(this.group1);
+            this.tab1.Groups.Add(this.groupUSZN);
             this.tab1.Label = "УСЗН";
             this.tab1.Name = "tab1";
             // 
@@ -64,6 +68,21 @@
             this.button1.ShowImage = true;
             this.button1.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.button1_Click);
             // 
+            // groupUSZN
+            // 
+            this.groupUSZN.Items.Add(this.btnCreateTables);
+            this.groupUSZN.Label = "Создание по шаблону";
+            this.groupUSZN.Name = "groupUSZN";
+            // 
+            // btnCreateTables
+            // 
+            this.btnCreateTables.ControlSize = Microsoft.Office.Core.RibbonControlSize.RibbonControlSizeLarge;
+            this.btnCreateTables.Image = global::ExcelAddInUSZN.Properties.Resources.microsoft;
+            this.btnCreateTables.Label = "Создать документ по шаблону";
+            this.btnCreateTables.Name = "btnCreateTables";
+            this.btnCreateTables.ShowImage = true;
+            this.btnCreateTables.Click += new Microsoft.Office.Tools.Ribbon.RibbonControlEventHandler(this.btnCreateTables_Click);
+            // 
             // Ribbon1
             // 
             this.Name = "Ribbon1";
@@ -74,6 +93,8 @@
             this.tab1.PerformLayout();
             this.group1.ResumeLayout(false);
             this.group1.PerformLayout();
+            this.groupUSZN.ResumeLayout(false);
+            this.groupUSZN.PerformLayout();
             this.ResumeLayout(false);
 
         }
@@ -83,6 +104,8 @@
         internal Microsoft.Office.Tools.Ribbon.RibbonTab tab1;
         internal Microsoft.Office.Tools.Ribbon.RibbonGroup group1;
         internal Microsoft.Office.Tools.Ribbon.RibbonButton button1;
+        internal Microsoft.Office.Tools.Ribbon.RibbonGroup groupUSZN;
+        internal Microsoft.Office.Tools.Ribbon.RibbonButton btnCreateTables;
     }
 
     partial class ThisRibbonCollection
