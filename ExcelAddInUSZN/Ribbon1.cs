@@ -386,7 +386,7 @@ namespace ExcelAddInUSZN
             catch (Exception e)
             {
                 // Если возникает ошибка, она отображается в диалоговом окне с сообщением об ошибке.
-                //MessageBox.Show($"Ошибка: {e.Message}");
+                MessageBox.Show($"Ошибка: {e.Message}");
             }
         }
 
@@ -489,7 +489,7 @@ namespace ExcelAddInUSZN
             }
             catch (System.Runtime.InteropServices.COMException e)
             {
-                // Обработка ошибки при объединении ячеек
+                MessageBox.Show($"Ошибка: {e.Message}");
             }
 
             // Добавляем новый абзац в конец документа
@@ -515,7 +515,7 @@ namespace ExcelAddInUSZN
                 // Обработка ошибки, если таблица не найдена или возникла другая проблема
                 // Вместо этого можно вернуть float.MinValue или другое значение по умолчанию
                 // в зависимости от требований вашего приложения.
-                //MessageBox.Show($"Ошибка: {e.Message}");
+                MessageBox.Show($"Ошибка: {e.Message}");
 
             }
         }
